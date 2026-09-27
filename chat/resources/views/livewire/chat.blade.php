@@ -60,23 +60,25 @@
                 this.open(conversation.id)
             },
 
-            send() {
+            async send() {
                 const body = this.draft.trim()
 
                 if (body === '' || ! this.active) {
                     return
                 }
 
+                const conversation = this.active
                 const stamp = this.stamp()
-
-                this.active.messages.push({
-                    id: ++this.lastMessageId,
+                const message = {
+                    id: 'pending-' + (++this.lastMessageId),
                     body: body,
                     mine: true,
                     read: false,
                     time: stamp.time,
                     day: stamp.day,
-                })
+                }
+
+                conversation.messages.push(message)
 
                 this.draft = ''
                 this.emojiOpen = false
@@ -86,6 +88,42 @@
                     }
                 })
                 this.scrollDown()
+
+                try {
+                    const response = await fetch(@js(route('messages.store')), {
+                        method: 'POST',
+                        headers: {
+                            Accept: 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': @js(csrf_token()),
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ receiver_id: conversation.id, message: body }),
+                    })
+
+                    if (! response.ok) {
+                        throw new Error('Send failed: ' + response.status)
+                    }
+
+                    const payload = await response.json()
+                    const stored = conversation.messages.find(m =&gt; m.id === message.id)
+
+                    if (stored &amp;&amp; payload.data) {
+                        stored.id = payload.data.id
+                    }
+                } catch (error) {
+                    conversation.messages = conversation.messages.filter(m =&gt; m.id !== message.id)
+
+                    if (this.active === conversation &amp;&amp; this.draft === '') {
+                        this.draft = body
+                        this.$nextTick(() =&gt; {
+                            if (this.$refs.composer) {
+                                this.grow(this.$refs.composer)
+                            }
+                        })
+                    }
+                }
             },
 
             insertEmoji(emoji) {

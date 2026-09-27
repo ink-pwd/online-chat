@@ -10,7 +10,7 @@ class UserRepository
     public function searchUsersByNameOrEmail(string $query): Collection
     {
         return User::query()
-            ->select(["name", "email",])
+            ->select(["id", "name", "email",])
             ->where("name", "like", "%$query%")
             ->orWhere("email", "like", "%$query%")
             ->limit(10)
